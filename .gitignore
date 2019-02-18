@@ -1,0 +1,11 @@
+experiment*/
+experiment*
+*seprsco_train/
+*seprsco_val/
+__pycache__/
+.ipynb_checkpoints/
+begin.pickle
+end.pickle
+test_sample.pickle
+MusicVAE_exprsco.pyc
+2019*/
