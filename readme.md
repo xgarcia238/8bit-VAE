@@ -4,7 +4,7 @@ An implementation of [MusicVAE](https://arxiv.org/abs/1803.05428) using the [NES
 
 The model takes two snips of music (possibly even a second long each) and tries to interpolate between the two. Have a listen!
 
-[Sample 1][https://soundcloud.com/xavier-garcia-958359339/52-sample-6]
+[Sample 1](https://soundcloud.com/xavier-garcia-958359339/52-sample-6)
 
 
 
