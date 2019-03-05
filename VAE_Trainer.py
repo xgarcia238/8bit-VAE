@@ -83,6 +83,8 @@ class Trainer:
         k = self.samp_rate
         if k == None:
             return 0
+        if k == 1.0:
+            return 1
         return k/(k + exp(step/k))
 
     def KL_annealing(self, step, start, end):

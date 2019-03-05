@@ -1,7 +1,7 @@
 import torch
 import VAE_Trainer
 #from multitrackVAE import Encoder, Decoder
-from MusicVAE import Encoder, Decoder
+from MusicVAE_TF import Encoder, Decoder
 from data_utils import CompactCompositions
 from checkpoint import Checkpoint
 
@@ -21,7 +21,7 @@ val_comp = CompactCompositions(dev_data_path)
 #Prepare trainer.
 Ash_Ketchum = VAE_Trainer.Trainer(exp_dir = exp_dir, score_type = score_type,
             batch_size=128, random_seed=42, print_every=100, checkpoint_every=10000,
-            samp_rate = None, KL_rate = 0.99991, free_bits = 60)
+            samp_rate = 1.0, KL_rate = 0.99991, free_bits = 60)
 
 #Check to see if we've already started the experiment
 resume = False
@@ -34,7 +34,7 @@ else:
     encoder_hidden_size = 256
     decoder_hidden_size = 512
     latent_size = 64
-    seq_size = 36
+    seq_size = 24
     num_layers = 2
     encoder = Encoder(vocab_size, encoder_hidden_size, latent_size,
                         seq_size, num_layers).to(device)

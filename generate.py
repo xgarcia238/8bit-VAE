@@ -17,7 +17,7 @@ n1= 66337
 #n2 = 33614#
 #n1 =  2953
 #n1 = 0
-n2 = 33614
+n2 = 8203
 #generate_nes_score(path, seconds, name, temp, score_type)
 
 """
@@ -30,4 +30,4 @@ Good songs:
 """
 with torch.no_grad():
     interpolation(data_path, path, temp, seconds, name,
-                song_id1 = n1, song_id2 = n2, n_steps = 10)
+                song_id1 = n1, song_id2 = n2, n_steps = 15)

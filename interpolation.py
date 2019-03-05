@@ -1,6 +1,6 @@
 from checkpoint import Checkpoint
 from data_utils import CompactCompositions
-from preprocessing import postprocessing
+from preprocessing import postprocessing, postprocessing_with_TR
 import torch
 import numpy as np
 import pickle
@@ -44,8 +44,8 @@ def interpolation(data_path, checkpoint_path, temp, seconds, name,
     end      = comps[song_id2]
 
 
-    begin_score = postprocessing([begin.numpy()],32)
-    end_score = postprocessing([end.numpy()],32)
+    begin_score = postprocessing_with_TR([begin.numpy()],32)
+    end_score = postprocessing_with_TR([end.numpy()],32)
     #Store for comparison.
 
 
@@ -76,7 +76,7 @@ def interpolation(data_path, checkpoint_path, temp, seconds, name,
     steps = [step[0].unsqueeze(0) for step in steps]
     steps = torch.cat(steps)
     steps = torch.cat((recon_1[0].unsqueeze(0), steps, recon_2[0].unsqueeze(0)),0)
-    steps = postprocessing(steps,32)
+    steps = postprocessing_with_TR(steps,32)
     time = 44100*steps.shape[0]//24
     print(steps.shape)
 
