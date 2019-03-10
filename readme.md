@@ -6,7 +6,7 @@ The model takes two snips of music (possibly even a second long each) and tries 
 
 [Sample 1][https://soundcloud.com/xavier-garcia-958359339/52-sample-6]
 
-
+To set it up, clone the repo and run prepare_data.py. This will prepare the dataset to fit our special data representation. After this run, run train.py. You can track the training by looking at the log file. Once training is done, I suggest using generate_tr.py. If training a model which does not use the TR voice, then use generate.py. 
 
 ## Author
 

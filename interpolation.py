@@ -14,19 +14,20 @@ def angle_between(v1, v2):
     return torch.acos(torch.dot(v1_u[0], v2_u[0])).unsqueeze(0)
 
 def spherical_interpolation(code1,code2,t):
-    angle = angle_between(code1,code2)
+    angle = angle_between(code1,code2)/2
     return (torch.sin((1-t)*angle)*code1 + torch.sin(t*angle)*code2)/torch.sin(angle)
 
 #def spherical_interpolation(code1,code2,t):
 #    return (1-t)*code1 + t*code2
 
 def interpolation(data_path, checkpoint_path, temp, seconds, name,
-                song_id1 = None, song_id2 = None, n_steps = 20):
+                song_id1 = None, song_id2 = None, n_steps = 20, TR = True):
     #Load decoder.
     cp = Checkpoint.load(checkpoint_path)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     encoder = cp.encoder.to(device).eval()
     decoder = cp.decoder.to(device).eval()
+    postproc = postprocessing_with_TR if TR else postprocessing
     rate = 24.0
     nsamps = 44100*seconds
 
@@ -44,8 +45,8 @@ def interpolation(data_path, checkpoint_path, temp, seconds, name,
     end      = comps[song_id2]
 
 
-    begin_score = postprocessing_with_TR([begin.numpy()],32)
-    end_score = postprocessing_with_TR([end.numpy()],32)
+    begin_score = postproc([begin.numpy()],32)
+    end_score = postproc([end.numpy()],32)
     #Store for comparison.
 
 
@@ -76,7 +77,7 @@ def interpolation(data_path, checkpoint_path, temp, seconds, name,
     steps = [step[0].unsqueeze(0) for step in steps]
     steps = torch.cat(steps)
     steps = torch.cat((recon_1[0].unsqueeze(0), steps, recon_2[0].unsqueeze(0)),0)
-    steps = postprocessing_with_TR(steps,32)
+    steps = postproc(steps,32)
     time = 44100*steps.shape[0]//24
     print(steps.shape)
 
