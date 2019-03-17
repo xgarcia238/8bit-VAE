@@ -31,7 +31,7 @@ if resume:
     Ash_Ketchum.train(None,None,n_epochs,train_comp,val_comp,True,None,log_file)
 else:
     vocab_size = 275
-    encoder_hidden_size = 512
+    encoder_hidden_size = 256
     decoder_hidden_size = 512
     latent_size = 128
     seq_size = 52

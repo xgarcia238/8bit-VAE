@@ -17,7 +17,7 @@ VOICES = {"P1": (77,16,4),
 
 
 def dataset_builder(input_folder, output_folder, score_type,threshold, note_size,
-                    num_steps, window_size, min_length = 10, TR=False):
+                    num_steps, window_size, min_length = 10, TR=False, sparse=False):
     """
     ----------------------------------------------------------------------------
     Args:
@@ -43,8 +43,14 @@ def dataset_builder(input_folder, output_folder, score_type,threshold, note_size
     max_len = 32
     voices = 3 if TR else 2
     song_idx = defaultdict(list)
+    cnt_offset = 2*note_size-1 + (note_size+12)
     f = np.vectorize(lambda x,shift : x + shift if x > 0 else 0)
-    postproc = postprocessing_with_TR if TR else postprocessing
+    if sparse:
+        postproc = proprocessing_sparse
+    elif TR:
+        postproc = postprocessing_with_TR
+    else:
+        postproc = postprocessing
 
     for song in glob.glob(input_folder + '/*'):
 
@@ -77,21 +83,42 @@ def dataset_builder(input_folder, output_folder, score_type,threshold, note_size
             for shift in range(min_shift, max_shift+1):
                 f_score = song_normalizer(f(score,shift), score_type, False, None)
                 f_score = f_score.astype(np.uint16)[:,:voices]
-                f_score, valid = compactify_score(f_score, note_size, max_len,True,TR)
-                if not valid:
-                    break
-
-                #Checking we didn't mess up processing.
-                assert np.array_equal(postproc([f_score], threshold), f(score, shift))
                 left, right = 0, num_steps
 
-                while right < f_score.shape[0]:
-                    data   = torch.from_numpy(f_score[left:right]).type(torch.int16).unsqueeze(0)
-                    left  += window_size
-                    right += window_size
-                    if shift == 0:
-                        song_idx[song].append(len(big_data))
-                    big_data.append(data)
+                if not sparse:
+                    f_score, valid = compactify_score(f_score, note_size, max_len,True,TR, sparse)
+                    if not valid:
+                        break
+
+                    #Checking we didn't mess up processing.
+                    #assert np.array_equal(postproc([f_score], threshold), f(score, shift))
+
+                    while right < f_score.shape[0]:
+                        data   = torch.from_numpy(f_score[left:right]).type(torch.int16).unsqueeze(0)
+                        left  += window_size
+                        right += window_size
+                        if shift == 0:
+                            song_idx[song].append(len(big_data))
+                        big_data.append(data)
+                else:
+                    #Mulplipy right by a little to give some wiggle room.
+                    while 4*right//3 < f_score.shape[0]:
+                        cur_score = f_score[left:4*right//3]
+                        cur_score, valid = compactify_score(cur_score, note_size, max_len,True, TR, sparse)
+                        left += window_size
+                        right += window_size
+
+                        #Check that  cur_score[:num_steps] ends with count.
+                        if not valid or cur_score[num_steps-1] <= cnt_offset:
+                            continue
+                        cur_score = torch.from_numpy(cur_score[:num_steps]).type(torch.int16).unsqueeze(0)
+                        big_data.append(cur_score)
+                        if shift == 0:
+                            song_idx[song].append(len(big_data))
+
+
+
+
 
     big_data = torch.cat(big_data,0)
     print("Shape of data: ", big_data.shape)
@@ -143,7 +170,7 @@ def song_normalizer(score, score_type, reverse = False, threshold = None):
     return score
 
 
-def postprocessing(data, threshold, separate=True):
+def postprocessing(data, separate=True):
     """
     --------------------------------------------------------------------------
     This takes the output data of our model turns into NES playable form. For
@@ -155,15 +182,15 @@ def postprocessing(data, threshold, separate=True):
         result (np.array): Shape (batch_size,time,4)
     --------------------------------------------------------------------------
     """
-    P1_normalizer = np.vectorize(lambda x : x + threshold if x > 0 else 0)
-    P2_normalizer = np.vectorize(lambda x : x + threshold if x > 0 else 0)
+    P1_normalizer = np.vectorize(lambda x : x + 32 if x > 0 else 0)
+    P2_normalizer = np.vectorize(lambda x : x + 32 if x > 0 else 0)
     #TR_normalizer = np.vectorize(lambda x : x + threshold if x > 0 else 0)
     #NO_normalizer = np.vectorize(lambda x : x)
 
     normalizers = [P1_normalizer,P2_normalizer]
 
     res = []
-    note_size = 108-threshold+1
+    note_size = 108-32+1
     offset = 0
     res = []
     P2_offset = note_size if separate else 0
@@ -179,7 +206,7 @@ def postprocessing(data, threshold, separate=True):
         res.append(np.vstack(notes))
     return np.vstack(res)
 
-def postprocessing_with_TR(data, threshold, separate=True):
+def postprocessing_with_TR(data, separate=True):
     """
     --------------------------------------------------------------------------
     This takes the output data of our model turns into NES playable form. For
@@ -196,7 +223,7 @@ def postprocessing_with_TR(data, threshold, separate=True):
     TR_normalizer = np.vectorize(lambda x : x + 20 if x > 0 else 0)
     #NO_normalizer = np.vectorize(lambda x : x)
 
-    normalizers = [P1_normalizer,P2_normalizer]
+    normalizers = [P1_normalizer,P2_normalizer, TR_normalizer]
 
     res = []
     note_size = 108-32+1
@@ -219,11 +246,46 @@ def postprocessing_with_TR(data, threshold, separate=True):
         res.append(np.vstack(notes))
     return np.vstack(res)
 
+def postprocessing_sparse(data, separate=True):
+
+    P1_normalizer = lambda x : x + 32 if x > 0 else 0
+    P2_normalizer = lambda x : x + 32 if x > 0 else 0
+    TR_normalizer = lambda x : x + 20 if x > 0 else 0
+    #NO_normalizer = np.vectorize(lambda x : x)
+
+    normalizers = [P1_normalizer,P2_normalizer, TR_normalizer]
+
+    res = []
+    note_size = 108-32+1
+    offset = 0
+    P2_offset = note_size if separate else 0
+    TR_offset = 2*note_size if separate else 0
+    cnt_offset = 2*note_size - 1 + (note_size + 12) if separate else 0
+
+    for song in data:
+        notes = [[P1_normalizer(song[0]), P2_normalizer(song[1]-P2_offset), TR_normalizer(song[2]-TR_offset),0] for _ in range(song[3]-cnt_offset)]
+        last_notes = notes[-1][:]
+        new_notes = []
+        for event in song[4:]:
+            if event < P2_offset: #P1 pitch change.
+                last_notes[0] = P1_normalizer(event)
+            elif P2_offset <= event < TR_offset: #P2 pitch change
+                last_notes[1] = P2_normalizer(event - P2_offset)
+            elif TR_offset <= event <= cnt_offset: #TR pitch change
+                last_notes[2] = TR_normalizer(event - TR_offset)
+            else:
+                cnt = event - cnt_offset
+                assert cnt > 0, cnt
+                notes.extend([last_notes[:]]*cnt)
+
+        res.append(np.asarray([notes]))
+
+    return np.vstack(res)
 
 def one_hot(a, num_classes):
     return np.squeeze(np.eye(num_classes)[a.reshape(-1)])
 
-def compactify_score(score, note_size, max_len, separate=True, TR=False):
+def compactify_score(score, note_size, max_len, separate=True, TR=False, sparse=True):
     """
     ----------------------------------------------------------------------------
     This turns a piano_roll for a single voice into a sequence of events,
@@ -275,8 +337,12 @@ def compactify_score(score, note_size, max_len, separate=True, TR=False):
         events.append(cnt_offset + count + offset)
         max_count = max(max_count,count)
         count = 1
-
-        events += [offset + notes[i] for i,offset in enumerate(voice_offsets[:voices])]
+        if sparse:
+            events += [offset + notes[i] for i,offset in enumerate(voice_offsets[:voices])]
+        else:
+            for i in range(voices):
+                if last_notes[i] != notes[i]:
+                    events.append(voice_offsets[i] + notes[i])
         last_notes = notes
 
         if max_count > max_len:
@@ -289,72 +355,3 @@ def compactify_score(score, note_size, max_len, separate=True, TR=False):
     events = np.asarray(events).astype(np.int16)
 
     return (events, True)
-"""
-def compactify_score(score, note_size, max_len, separate=True):
-
-    ----------------------------------------------------------------------------
-    This turns a piano_roll for a single voice into a sequence of events,
-    similar to Magenta's event decomposition. We count how many steps a note is
-    held, then turn into two events. The first event consists of a onehot version
-    of the note, and the other consists of onehot version of the number of steps
-    into the future.
-
-    Args:
-        score (np.array): Normalized score.
-        note_size (int): Number of notes per instrument, including off.
-        max_len (int): Maximum length allowed.
-        separate (bool): If True, separate P1 notes, P2 notes and time shift by
-        adding note_size.
-
-    Returns:
-        events (np.array): An array containing appropiate note values and counts,
-         with an offset by timesteps. Shape =(3, 2*timesteps+1)
-        lengths (np.array): An array containing lengths. Shape = (3,)
-    ----------------------------------------------------------------------------
-
-    events = []
-    voices = ["P1","P2","TR","NO"]
-    timesteps = score.shape[0]
-    offset = 0
-    P2_offset = note_size if separate else 0
-    cnt_offset = 2*note_size - 1 if separate else 0
-    lengths = []
-    score_length = score.shape[0]
-
-    last_notes = score[0]
-    max_count = 0
-    count = 0
-    events = [last_notes[0], last_notes[1] + P2_offset]
-    for notes in score:
-        #If same note, increase count.
-        if np.array_equal(notes,last_notes):
-            count += 1
-            #cur_count += 1
-            continue
-
-        events.append(cnt_offset + count + offset)
-        max_count = max(max_count,count)
-        count = 1
-        events.append(notes[0])
-        events.append(P2_offset + notes[1])
-        if notes[0] != last_notes[0] and notes[1] != last_notes[1]:
-            last_notes[1] = notes[1]
-            last_notes[0] = notes[0]
-
-        elif notes[0] != last_notes[0]:
-            last_notes[0] = notes[0]
-
-        elif notes[1] != last_notes[1]:
-            last_notes[1] = notes[1]
-
-        if max_count > max_len:
-            return (0,False)
-    max_count = max(count, max_count)
-    if max_count > max_len:
-        return (0,False)
-
-    events.append(cnt_offset + count + offset)
-    events = np.asarray(events).astype(np.uint8)
-
-    return (events, True)
-"""

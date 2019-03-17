@@ -14,7 +14,7 @@ def angle_between(v1, v2):
     return torch.acos(torch.dot(v1_u[0], v2_u[0])).unsqueeze(0)
 
 def spherical_interpolation(code1,code2,t):
-    angle = angle_between(code1,code2)/2
+    angle = angle_between(code1,code2)
     return (torch.sin((1-t)*angle)*code1 + torch.sin(t*angle)*code2)/torch.sin(angle)
 
 #def spherical_interpolation(code1,code2,t):
@@ -36,6 +36,7 @@ def interpolation(data_path, checkpoint_path, temp, seconds, name,
     n_comps = len(comps)
     if song_id1 is None:
         song_id1 = np.random.randint(0,n_comps)
+        print(song_id1)
     if song_id2 is None:
         song_id2 = np.random.randint(0,n_comps)
 
@@ -77,7 +78,7 @@ def interpolation(data_path, checkpoint_path, temp, seconds, name,
     steps = [step[0].unsqueeze(0) for step in steps]
     steps = torch.cat(steps)
     steps = torch.cat((recon_1[0].unsqueeze(0), steps, recon_2[0].unsqueeze(0)),0)
-    steps = postproc(steps,32)
+    steps = postproc(steps)
     time = 44100*steps.shape[0]//24
     print(steps.shape)
 
